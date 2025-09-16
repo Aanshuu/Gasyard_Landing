@@ -13,17 +13,17 @@ const FEATURES = [
   {
     title: "SUB-7S FINALITY",
     subtitle:
-      "Settlement completes on the destination chain in under seven seconds under normal network conditions.",
+      "End-to-end settlement in under 7 seconds. <br/> Less waiting, more doing.",
   },
   {
     title: "SOLVER-POWERED EXECUTION",
     subtitle:
-      "Aggregated solvers compete to fulfill intents optimally, minimizing user friction and failures.",
+      "End-to-end settlement in under 7 seconds. <br/> Declare intent; our solvers transact on your behalf. <br/> No juggling steps, approvals, or chains.",
   },
   {
     title: "UNIVERSAL LIQUIDITY",
     subtitle:
-      "Tap into cross-chain liquidity sources to reserve assets and gas where and when you need it.",
+      "Shared pools back every route. <br/> Lower slippage, higher reliability.",
   },
 ];
 
@@ -120,8 +120,8 @@ export default function FeatureBlocks() {
                 <h1 className="text-4xl sm:text-4xl lg:text-5xl font-medium text-foreground tracking-wide">
                   {f.title}
                 </h1>
-                <p className="mt-3 text-lg sm:text-base text-foreground max-w-prose">
-                  {f.subtitle}
+                <p className="mt-3 text-lg sm:text-base text-foreground max-w-prose whitespace-pre-line">
+                  {f.subtitle.replace(/<br\s*\/?\>/gi, "\n")}
                 </p>
               </div>
             </div>
