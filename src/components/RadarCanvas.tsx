@@ -132,7 +132,6 @@ export default function RadarCanvas({
       const baseAlpha = 0.12;
       const ringAlphaConst = 1.0;
       const wedgeAlpha = 0.85;
-      const innerRadius = Rdraw * 0.12; // used only if you want a center ring (we keep it inactive below)
 
       ctx.fillStyle = "#FFFFFF";
 
@@ -146,7 +145,7 @@ export default function RadarCanvas({
 
         // Angle from center
         const phi = Math.atan2(dy, dx);
-        let dAng = Math.abs(angularDiff(phi, angle));
+        const dAng = Math.abs(angularDiff(phi, angle));
 
         // Base alpha with optional background wave modulation (angular)
         let a = baseAlpha;
@@ -252,7 +251,7 @@ export default function RadarCanvas({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (roRef.current && canvas.parentElement) roRef.current.unobserve(canvas.parentElement);
     };
-  }, [dotSize, grid, ringThickness, speed, wedgeWidth, running, sweepWedge, animateRing, centerDot, ringRadiusPx, centerDotRadiusPx, ringWave, ringWaveBase, ringWaveBoost, gridWave, gridWaveAmp, ringWaveSpeed, respectReducedMotion, brightnessScale]);
+  }, [dotSize, grid, ringThickness, speed, wedgeWidth, running, sweepWedge, showHand, handWidthPx, animateRing, centerDot, ringRadiusPx, centerDotRadiusPx, ringWave, ringWaveBase, ringWaveBoost, gridWave, gridWaveAmp, ringWaveSpeed, respectReducedMotion, brightnessScale]);
 
   return (
     <canvas ref={canvasRef} className="absolute inset-0 block" aria-hidden />

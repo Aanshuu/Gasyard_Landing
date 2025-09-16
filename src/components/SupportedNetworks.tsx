@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const CHAIN_LOGOS = [
   { src: "/etherium.svg", alt: "Ethereum" },
   { src: "/polygon.svg", alt: "Polygon" },
@@ -27,9 +29,12 @@ export default function SupportedNetworks() {
                 key={`${c.alt}-${i}`}
                 className="basis-[12.5%] shrink-0 grow-0"
               >
-                <img
+                <Image
                   src={c.src}
                   alt={c.alt}
+                  width={160}
+                  height={64}
+                  sizes="(max-width: 640px) 12.5vw, (max-width: 768px) 12.5vw, 12.5vw"
                   className="w-full h-auto max-h-16 sm:max-h-20 md:max-h-24 object-contain opacity-90 hover:opacity-100 transition-opacity"
                 />
               </div>

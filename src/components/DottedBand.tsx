@@ -35,9 +35,7 @@ export const DottedBand: React.FC<DottedBandProps> = ({
   twinkle,
   height = 192,
   opacity = 0.35,
-  // legacy, unused but kept for API compatibility
-  svgPath: _svgPath,
-  mode: _mode,
+  // 'svgPath' and 'mode' props are allowed for backwards compatibility but intentionally unused.
   cell = 12,
   dotSize = 4,
   edgeFadePct = 12,
@@ -237,7 +235,7 @@ export const DottedBand: React.FC<DottedBandProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (roRef.current) roRef.current.disconnect();
     };
-  }, [heightPx, cell, dotSize, twinkle, running, scrollSpeedX, scrollSpeedY, counterSkewXDeg]);
+  }, [heightPx, cell, dotSize, twinkle, twinklePatterns, twinkleFps, twinkleDepth, running, scrollSpeedX, scrollSpeedY, counterSkewXDeg]);
 
   const fade = Math.max(0, Math.min(49, edgeFadePct));
 
