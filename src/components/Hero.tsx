@@ -1,7 +1,27 @@
+"use client";
+
 import DottedBand from "@/components/DottedBand";
 import Navbar from "@/components/Navbar";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Hero() {
+  // Cycle highlight across the three slabs (Intent, Execution, Finality)
+  const [active, setActive] = useState(0); // 0..2
+  useEffect(() => {
+    const id = setInterval(() => setActive((i) => (i + 1) % 3), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Base opacities preserved from original layout
+  //   const baseOps = useMemo(() => [0.18, 0.28, 0.42], []);
+  const baseOps = useMemo(() => [0.28, 0.28, 0.28], []);
+  const slabOpacity = (idx: number) => {
+    // Brighter when active, dimmer when inactive
+    return Math.min(1, baseOps[idx] * (active === idx ? 3.6 : 2.0));
+  };
+  const slabCell = (idx: number) => (active === idx ? 8 : 10);
+  const slabDot = (idx: number) => (active === idx ? 3.2 : 2.6);
+
   return (
     <section className="relative overflow-hidden">
       {/* Fixed Navbar inside Hero so the dotted band starts at page top behind it */}
@@ -11,6 +31,8 @@ export default function Hero() {
         <DottedBand
           className="top-0" // start below the fixed navbar; hero wrapper already sits under nav
           twinkle={false}
+          running={false}
+          scrollSpeedX={-12}
           height={380}
           opacity={0.25}
           edgeFadePct={20}
@@ -28,6 +50,8 @@ export default function Hero() {
         <DottedBand
           className="top-0"
           twinkle={false}
+          running={false}
+          scrollSpeedX={-10}
           height={300}
           opacity={0.08}
           edgeFadePct={20}
@@ -48,27 +72,60 @@ export default function Hero() {
         {/* Layered bands: simple approximation with skewed cards and labels */}
         <div className="mt-6 sm:mt-8 grid grid-cols-[100px_1fr] gap-4 sm:gap-6 items-start">
           {/* Labels column */}
-          <div className="text-white/60 space-y-8 sm:space-y-10 pt-16">
-            <div className="text-sm sm:text-xl">Intent</div>
-            <div className="text-sm sm:text-xl">Execution</div>
-            <div className="text-sm sm:text-xl font-medium text-foreground">Finality</div>
+          <div className="space-y-8 sm:space-y-10 pt-16">
+            <div className={active === 0 ? "text-sm sm:text-xl font-medium text-foreground" : "text-sm sm:text-xl text-white/60"}>Intent</div>
+            <div className={active === 1 ? "text-sm sm:text-xl font-medium text-foreground" : "text-sm sm:text-xl text-white/60"}>Execution</div>
+            <div className={active === 2 ? "text-sm sm:text-xl font-medium text-foreground" : "text-sm sm:text-xl text-white/60"}>Finality</div>
           </div>
 
           {/* Layers column */}
           <div className="relative h-[280px]">
             {/* Top layer */}
             <div className="absolute left-0 right-0 top-[20px] mx-auto max-w-[720px] h-[90px] -skew-x-[45deg] border border-white/20 rounded-none overflow-hidden">
-              <DottedBand className="top-0" twinkle={false} height={90} opacity={0.18} edgeFadePct={18} />
+              <DottedBand
+                className="top-0"
+                twinkle={false}
+                running={false}
+                scrollSpeedX={-24}
+                height={90}
+                opacity={slabOpacity(0)}
+                edgeFadePct={18}
+                cell={slabCell(0)}
+                dotSize={slabDot(0)}
+                counterSkewXDeg={45}
+              />
             </div>
 
             {/* Middle layer */}
             <div className="absolute left-0 right-0 top-[80px] mx-auto max-w-[720px] h-[90px] -skew-x-[45deg] border border-white/25 rounded-none overflow-hidden">
-              <DottedBand className="top-0" twinkle={false} height={90} opacity={0.28} edgeFadePct={18} />
+              <DottedBand
+                className="top-0"
+                twinkle={false}
+                running={false}
+                scrollSpeedX={-24}
+                height={90}
+                opacity={slabOpacity(1)}
+                edgeFadePct={18}
+                cell={slabCell(1)}
+                dotSize={slabDot(1)}
+                counterSkewXDeg={45}
+              />
             </div>
 
             {/* Bottom layer */}
             <div className="absolute left-0 right-0 top-[140px] mx-auto max-w-[720px] h-[90px] -skew-x-[45deg] border border-white/40 rounded-none overflow-hidden">
-              <DottedBand className="top-0" twinkle={false} height={90} opacity={0.42} edgeFadePct={18} />
+              <DottedBand
+                className="top-0"
+                twinkle={false}
+                running={false}
+                scrollSpeedX={-24}
+                height={90}
+                opacity={slabOpacity(2)}
+                edgeFadePct={18}
+                cell={slabCell(2)}
+                dotSize={slabDot(2)}
+                counterSkewXDeg={45}
+              />
             </div>
           </div>
         </div>

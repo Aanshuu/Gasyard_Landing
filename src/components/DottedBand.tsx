@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useId } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export interface DottedBandProps {
@@ -14,6 +14,20 @@ export interface DottedBandProps {
   dotSize?: number;
   /** Percent fade at top and bottom edges for smooth stacking (0-49). */
   edgeFadePct?: number;
+  /** Apply an opposite skew on the inner drawing surface to neutralize parent skew for crisp squares. */
+  counterSkewXDeg?: number;
+  /** Whether to run the canvas render loop (for subtle background panning) */
+  running?: boolean;
+  /** Horizontal panning speed in CSS px/sec (positive => right) */
+  scrollSpeedX?: number;
+  /** Vertical panning speed in CSS px/sec (positive => down) */
+  scrollSpeedY?: number;
+  /** Number of pre-generated twinkle frames to cycle through when twinkle is true */
+  twinklePatterns?: number;
+  /** Frames per second for twinkle frame stepping */
+  twinkleFps?: number;
+  /** How strongly the pattern modulates base alpha (0..1) */
+  twinkleDepth?: number;
 }
 
 export const DottedBand: React.FC<DottedBandProps> = ({
@@ -21,11 +35,19 @@ export const DottedBand: React.FC<DottedBandProps> = ({
   twinkle,
   height = 192,
   opacity = 0.35,
-  svgPath,
-  mode = "grid",
+  // legacy, unused but kept for API compatibility
+  svgPath: _svgPath,
+  mode: _mode,
   cell = 12,
   dotSize = 4,
   edgeFadePct = 12,
+  counterSkewXDeg = 0,
+  running = false,
+  scrollSpeedX = -20,
+  scrollSpeedY = 0,
+  twinklePatterns = 4,
+  twinkleFps = 1,
+  twinkleDepth = 0.6,
 }) => {
   const heightPx = useMemo(() => {
     if (typeof height === "number") return height;
@@ -33,51 +55,191 @@ export const DottedBand: React.FC<DottedBandProps> = ({
     return Number.isFinite(parsed) ? parsed : 192;
   }, [height]);
 
-  const rand01 = (seed: number) => {
-    const x = Math.sin(seed * 12.9898) * 43758.5453;
-    return x - Math.floor(x);
-  };
-
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [cols, setCols] = useState(0);
-  const rows = Math.max(1, Math.ceil(heightPx / cell));
-  const clipId = useId();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
+  const framesRef = useRef<number[][]>([]);
 
   useEffect(() => {
-    const node = containerRef.current;
-    const compute = (width: number) => {
-      setCols(Math.max(1, Math.floor(width / cell)));
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Device pixel ratio for crisp rendering
+    let dpr = Math.max(1, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+
+    // Precomputed grid
+    let width = 0;
+    let heightDev = 0;
+    let dots: {
+      x: number;
+      y: number;
+      base: number; // base alpha
+      amp: number; // twinkle amplitude
+      w: number; // angular frequency (rad/s)
+      phase: number; // phase offset (rad)
+      size: number; // device px
+    }[] = [];
+
+    const rand01 = (seed: number) => {
+      const x = Math.sin(seed * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
     };
 
-    const initialWidth =
-      (node?.clientWidth ?? document.documentElement.clientWidth ?? window.innerWidth) || 0;
-    compute(initialWidth);
+    const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-    let ro: ResizeObserver | null = null;
-    if (node && typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const w = entry.contentRect?.width || node.clientWidth;
-          compute(w);
+    const build = () => {
+      const wCssBase = container.clientWidth;
+      const hCss = heightPx; // fixed band height in CSS px
+      if (wCssBase === 0 || hCss === 0) return;
+
+      // Expand drawing width so skewed parents do not leave empty triangular corners.
+      const theta = Math.abs(counterSkewXDeg) * (Math.PI / 180);
+      const extraX = Math.tan(theta) * hCss; // css px to add horizontally
+      const wCss = wCssBase + (Number.isFinite(extraX) ? extraX : 0);
+
+      dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(wCss * dpr);
+      canvas.height = Math.floor(hCss * dpr);
+      canvas.style.width = `${wCss}px`;
+      canvas.style.height = `${hCss}px`;
+
+      width = canvas.width;
+      heightDev = canvas.height;
+
+      // Build grid points centered within cells, with 1-cell margin around to cover panning
+      dots = [];
+      const g = cell * dpr;
+      const size = Math.max(1, dotSize * dpr);
+      // Start from edges with an extra cell margin so panning doesn't create gaps
+      const xOffset = Math.max(size / 2, 0) - g;
+      const yOffset = Math.max(size / 2, 0) - g;
+
+      let row = 0;
+      for (let y = yOffset; y < heightDev + g; y += g) {
+        let col = 0;
+        for (let x = xOffset; x < width + g; x += g) {
+          // deterministic per-cell seeds for predictable twinkle
+          const r1 = rand01(row * 92821 + col * 68927 + 101);
+
+          const base = 0.18 + r1 * 0.62; // 0.18..0.8
+          const peak = Math.min(1, base + 0.4);
+          const amp = Math.max(0, peak - base);
+
+          // store dummy w/phase for backward compat (unused in frame-based twinkle)
+          const w = 0;
+          const phase = 0;
+          dots.push({ x, y, base, amp, w, phase, size });
+          col++;
         }
+        row++;
+      }
+
+      // Pre-generate twinkle frames (N patterns), deterministic from grid indices and frame index
+      framesRef.current = [];
+      const N = Math.max(1, Math.floor(twinklePatterns));
+      const depth = clamp01(twinkleDepth);
+      const total = dots.length;
+      for (let f = 0; f < N; f++) {
+        const frame: number[] = new Array(total);
+        let idx = 0;
+        row = 0;
+        for (let y = yOffset; y < heightDev + g; y += g) {
+          let col = 0;
+          for (let x = xOffset; x < width + g; x += g) {
+            const r = rand01(row * 104729 + col * 13007 + (f + 1) * 7919);
+            // shape the distribution so some dots spike higher; bias ~smooth
+            const shaped = Math.pow(r, 1.6); // 0..1, concentrates near 0
+            frame[idx++] = clamp01(1 - depth + depth * (0.4 + 0.6 * shaped));
+            col++;
+          }
+          row++;
+        }
+        framesRef.current.push(frame);
+      }
+    };
+
+    const clear = () => ctx.clearRect(0, 0, width, heightDev);
+
+    const drawFrame = (t: number) => {
+      clear();
+      const timeSec = t / 1000;
+      ctx.fillStyle = "#FFFFFF";
+
+      // Subtle background movement even when twinkle is off
+      const g = cell * dpr;
+      const vX = scrollSpeedX * dpr;
+      const vY = scrollSpeedY * dpr;
+      // wrap to [0,g)
+      const panX = ((timeSec * vX) % g + g) % g;
+      const panY = ((timeSec * vY) % g + g) % g;
+
+      const useFrames = twinkle && !prefersReduced && framesRef.current.length > 0;
+      const frameIdx = useFrames ? Math.floor(timeSec * Math.max(0.1, twinkleFps)) % framesRef.current.length : 0;
+      const frame = useFrames ? framesRef.current[frameIdx] : undefined;
+
+      for (let i = 0; i < dots.length; i++) {
+        const d = dots[i];
+        let a = d.base;
+        if (useFrames && frame) {
+          const m = frame[i]; // 0..1 multiplier
+          a = clamp01(d.base * m + d.amp * (m - 1 + 1)); // bias toward base with multiplier
+        }
+        if (a <= 0.01) continue;
+        ctx.globalAlpha = a;
+        const x = d.x + panX;
+        const y = d.y + panY;
+        ctx.fillRect(x - d.size / 2, y - d.size / 2, d.size, d.size);
+      }
+
+      ctx.globalAlpha = 1;
+    };
+
+    // Initial build and optional animation
+    build();
+
+    if (prefersReduced || (!twinkle && !running)) {
+      drawFrame(0);
+      if (typeof ResizeObserver !== "undefined") {
+        roRef.current = new ResizeObserver(() => {
+          build();
+          drawFrame(0);
+        });
+        roRef.current.observe(container);
+      }
+      return () => {
+        if (roRef.current) roRef.current.disconnect();
+      };
+    }
+
+    const loop = (t: number) => {
+      drawFrame(t);
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+
+    if (typeof ResizeObserver !== "undefined") {
+      roRef.current = new ResizeObserver(() => {
+        build();
       });
-      ro.observe(node);
-    } else {
-      const onResize = () => compute(window.innerWidth || document.documentElement.clientWidth);
-      window.addEventListener("resize", onResize);
-      return () => window.removeEventListener("resize", onResize);
+      roRef.current.observe(container);
     }
 
     return () => {
-      if (ro && node) ro.disconnect();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (roRef.current) roRef.current.disconnect();
     };
-  }, [cell]);
+  }, [heightPx, cell, dotSize, twinkle, running, scrollSpeedX, scrollSpeedY, counterSkewXDeg]);
 
-  const dots = useMemo(() => cols * rows, [cols, rows]);
-  const gap = Math.max(0, (cell - dotSize) / 2);
   const fade = Math.max(0, Math.min(49, edgeFadePct));
-  const vbWidth = cols * cell;
-  const vbHeight = rows * cell;
 
   return (
     <div
@@ -89,142 +251,28 @@ export const DottedBand: React.FC<DottedBandProps> = ({
       aria-hidden
     >
       <div
-        className="w-full"
+        className="w-full transition-opacity duration-500"
         style={{
           height: heightPx,
           opacity,
-          WebkitMaskImage:
-            `linear-gradient(to bottom, transparent, black ${fade}%, black ${100 - fade}%, transparent)`,
-          maskImage:
-            `linear-gradient(to bottom, transparent, black ${fade}%, black ${100 - fade}%, transparent)`,
+          WebkitMaskImage: `linear-gradient(to bottom, transparent, black ${fade}%, black ${100 - fade}%, transparent)`,
+          maskImage: `linear-gradient(to bottom, transparent, black ${fade}%, black ${100 - fade}%, transparent)`,
         }}
       >
-        {mode === "grid" ? (
+        <div className="relative h-full w-full">
           <div
-            className="grid"
+            className="absolute top-0 bottom-0"
             style={{
-              gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
-              gridAutoRows: `${cell}px`,
+              // Expand and center the inner drawing area horizontally so the skewed parent has no empty corners
+              width: `calc(100% + ${Math.tan(Math.abs(counterSkewXDeg) * Math.PI / 180) * heightPx}px)`,
+              left: `calc(-${Math.tan(Math.abs(counterSkewXDeg) * Math.PI / 180) * heightPx / 2}px)`,
+              transform: counterSkewXDeg ? `skewX(${counterSkewXDeg}deg)` : undefined,
+              transformOrigin: "center",
             }}
           >
-            {Array.from({ length: dots }).map((_, i) => {
-              const rowIndex = Math.floor(i / (cols || 1));
-              const colIndex = i % (cols || 1);
-
-              const r1 = rand01(rowIndex * 92821 + colIndex * 68927 + 101);
-              const r2 = rand01(rowIndex * 131 + colIndex * 173 + 202);
-              const r3 = rand01(rowIndex * 1973 + colIndex * 2713 + 303);
-              const r4 = rand01(rowIndex * 3571 + colIndex * 4159 + 404);
-
-              const baseOpacity = 0.18 + r1 * 0.62;
-              const duration = 1.6 + r2 * 1.0;
-              const phaseOffset = -r3 * duration;
-
-              const easingIndex = Math.floor(r4 * 5);
-              const easing =
-                easingIndex === 0
-                  ? "ease-in-out"
-                  : easingIndex === 1
-                  ? "cubic-bezier(0.42,0,0.58,1)"
-                  : easingIndex === 2
-                  ? "cubic-bezier(0.3,0.0,0.7,1)"
-                  : easingIndex === 3
-                  ? "cubic-bezier(0.2,0.0,0.8,1)"
-                  : "ease";
-
-              return (
-                <span
-                  key={i}
-                  data-twinkle={twinkle ? "true" : "false"}
-                  style={{
-                    width: dotSize,
-                    height: dotSize,
-                    backgroundColor: "hsla(0, 0%, 100%, 1)",
-                    opacity: baseOpacity,
-                    margin: `${gap}px`,
-                    animation: twinkle
-                      ? `twinkle var(--tw-duration, ${duration}s) var(--tw-easing, ${easing}) var(--tw-delay, ${phaseOffset}s) infinite alternate`
-                      : undefined,
-                    display: "block",
-                    borderRadius: 1,
-                    willChange: twinkle ? "opacity" : undefined,
-                    ["--tw-base" as any]: baseOpacity,
-                    ["--tw-peak" as any]: Math.min(1, baseOpacity + 0.4),
-                    ["--tw-duration" as any]: `${duration}s`,
-                    ["--tw-delay" as any]: `${phaseOffset}s`,
-                    ["--tw-easing" as any]: easing,
-                  }}
-                />
-              );
-            })}
+            <canvas ref={canvasRef} className="absolute inset-0 block" aria-hidden />
           </div>
-        ) : (
-          <svg
-            width="100%"
-            height={heightPx}
-            viewBox={`0 0 ${Math.max(1, vbWidth)} ${Math.max(1, vbHeight)}`}
-            preserveAspectRatio="none"
-            aria-hidden
-          >
-            {svgPath ? (
-              <defs>
-                <clipPath id={`path-clip-${clipId}`}>
-                  <path d={svgPath} />
-                </clipPath>
-              </defs>
-            ) : null}
-            <g clipPath={svgPath ? `url(#path-clip-${clipId})` : undefined}>
-              {Array.from({ length: dots }).map((_, i) => {
-                const rowIndex = Math.floor(i / (cols || 1));
-                const colIndex = i % (cols || 1);
-
-                const cx = colIndex * cell + cell / 2;
-                const cy = rowIndex * cell + cell / 2;
-                const r1 = rand01(rowIndex * 92821 + colIndex * 68927 + 101);
-                const r2 = rand01(rowIndex * 131 + colIndex * 173 + 202);
-                const r3 = rand01(rowIndex * 1973 + colIndex * 2713 + 303);
-                const r4 = rand01(rowIndex * 3571 + colIndex * 4159 + 404);
-
-                const baseOpacity = 0.18 + r1 * 0.62;
-                const duration = 1.6 + r2 * 1.0;
-                const phaseOffset = -r3 * duration;
-                const easingIndex = Math.floor(r4 * 5);
-                const easing =
-                  easingIndex === 0
-                    ? "ease-in-out"
-                    : easingIndex === 1
-                    ? "cubic-bezier(0.42,0,0.58,1)"
-                    : easingIndex === 2
-                    ? "cubic-bezier(0.3,0.0,0.7,1)"
-                    : easingIndex === 3
-                    ? "cubic-bezier(0.2,0.0,0.8,1)"
-                    : "ease";
-
-                return (
-                  <circle
-                    key={i}
-                    data-twinkle={twinkle ? "true" : "false"}
-                    cx={cx}
-                    cy={cy}
-                    r={dotSize / 2}
-                    fill="white"
-                    style={{
-                      opacity: baseOpacity,
-                      animation: twinkle
-                        ? `twinkle var(--tw-duration, ${duration}s) var(--tw-easing, ${easing}) var(--tw-delay, ${phaseOffset}s) infinite alternate`
-                        : undefined,
-                      ["--tw-base" as any]: baseOpacity,
-                      ["--tw-peak" as any]: Math.min(1, baseOpacity + 0.4),
-                      ["--tw-duration" as any]: `${duration}s`,
-                      ["--tw-delay" as any]: `${phaseOffset}s`,
-                      ["--tw-easing" as any]: easing,
-                    }}
-                  />
-                );
-              })}
-            </g>
-          </svg>
-        )}
+        </div>
       </div>
     </div>
   );
