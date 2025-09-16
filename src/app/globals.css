@@ -1,26 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0E0E0E;
+  --foreground: #FFFFFF;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-jetbrains-mono);
+  --font-mono: var(--font-jetbrains-mono);
+  /* Additional text color tokens */
+  --color-ink: #242424; /* dark ink for light surfaces */
+  --color-soft: #F1F1F1; /* soft light gray */
+  --color-white-40: rgb(255 255 255 / 0.4); /* white with 40% opacity */
+  /* Font weight tokens (map to Tailwind font-normal and font-medium) */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-weight: 400;
+}
+
+/* Twinkle animation for dotted bands. Uses per-dot custom properties for smooth perf. */
+@keyframes twinkle {
+  from { opacity: var(--tw-base, 0.5); }
+  to { opacity: var(--tw-peak, 1); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  [data-twinkle="true"] { animation: none !important; }
+}
+
+/* Marquee animation for chain logos (left-to-right continuous) */
+@keyframes marquee-right {
+  0% { transform: translate3d(-50%, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* Respect reduced motion for marquee */
+@media (prefers-reduced-motion: reduce) {
+  .animate-[marquee-right_12s_linear_infinite] { animation: none !important; }
 }
