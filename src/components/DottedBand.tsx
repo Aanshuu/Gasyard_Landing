@@ -7,10 +7,6 @@ export interface DottedBandProps {
   className?: string;
   twinkle?: boolean;
   height?: number | string;
-  /** Height to use on small screens (<sm). If provided with heightDesktop, component will switch between them. */
-  heightMobile?: number | string;
-  /** Height to use on >= sm screens. If provided with heightMobile, component will switch between them. */
-  heightDesktop?: number | string;
   opacity?: number;
   svgPath?: string;
   mode?: "grid" | "svg";
@@ -38,12 +34,10 @@ export const DottedBand: React.FC<DottedBandProps> = ({
   className,
   twinkle,
   height = 192,
-  heightMobile,
-  heightDesktop,
   opacity = 0.35,
   // legacy, unused but kept for API compatibility
-  svgPath: _svgPath,
-  mode: _mode,
+  // svgPath and mode are accepted in the props type for compatibility,
+  // but intentionally not destructured to avoid unused-var lint.
   cell = 12,
   dotSize = 4,
   edgeFadePct = 12,
@@ -55,33 +49,11 @@ export const DottedBand: React.FC<DottedBandProps> = ({
   twinkleFps = 1,
   twinkleDepth = 0.6,
 }) => {
-  const [isDesktop, setIsDesktop] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia && window.matchMedia("(min-width: 640px)").matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(min-width: 640px)");
-    const onChange = () => setIsDesktop(mq.matches);
-    if (typeof mq.addEventListener === "function") mq.addEventListener("change", onChange);
-    else (mq as any).addListener?.(onChange);
-    onChange();
-    return () => {
-      if (typeof mq.removeEventListener === "function") mq.removeEventListener("change", onChange);
-      else (mq as any).removeListener?.(onChange);
-    };
-  }, []);
-
   const heightPx = useMemo(() => {
-    const pick = (val: number | string | undefined) => {
-      if (typeof val === "number") return val;
-      const parsed = parseInt(String(val), 10);
-      return Number.isFinite(parsed) ? parsed : undefined;
-    };
-    const chosen = isDesktop ? pick(heightDesktop) ?? pick(height) : pick(heightMobile) ?? pick(height);
-    return chosen ?? 192;
-  }, [height, heightMobile, heightDesktop, isDesktop]);
+    if (typeof height === "number") return height;
+    const parsed = parseInt(String(height), 10);
+    return Number.isFinite(parsed) ? parsed : 192;
+  }, [height]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);

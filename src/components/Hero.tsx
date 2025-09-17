@@ -38,14 +38,13 @@ export default function Hero() {
       {/* Fixed Navbar inside Hero so the dotted band starts at page top behind it */}
       <Navbar />
       {/* === Band 1: Top band from page top to headline === */}
-      <div className="relative h-[320px] sm:h-[480px]">
+      <div className="relative h-[320px] sm:h-[520px]">
         <DottedBand
           className="top-0" // start below the fixed navbar; hero wrapper already sits under nav
           twinkle={false}
           running={false}
           scrollSpeedX={-12}
-          heightMobile={380}
-          heightDesktop={480}
+          height={520}
           opacity={0.25}
           edgeFadePct={20}
         />
@@ -58,14 +57,13 @@ export default function Hero() {
       </div>
 
       {/* === Band 2: Subheadline band directly below band 1, smooth overlap === */}
-      <div className="relative -mt-6 sm:-mt-8 h-[220px] sm:h-[340px]">
+      <div className="relative -mt-6 sm:-mt-8 h-[220px] sm:h-[360px]">
         <DottedBand
           className="top-0"
           twinkle={false}
           running={false}
           scrollSpeedX={-10}
-          heightMobile={300}
-          heightDesktop={340}
+          height={360}
           opacity={0.08}
           edgeFadePct={20}
         />
