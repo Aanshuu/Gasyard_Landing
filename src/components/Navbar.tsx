@@ -2,10 +2,25 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled((window.scrollY || document.documentElement.scrollTop) > 0);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="fixed inset-x-0 top-0 z-50">
+    <header
+      className={
+        "fixed inset-x-0 top-0 z-50 transition-[backdrop-filter,background-color] duration-300 " +
+        (scrolled ? "backdrop-blur-sm bg-background/30" : "backdrop-blur-0 bg-transparent")
+      }
+    >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between text-foreground">
           {/* Left: Logo */}
