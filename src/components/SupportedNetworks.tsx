@@ -21,7 +21,7 @@ export default function SupportedNetworks() {
 
         <div className="relative w-full overflow-hidden">
           <div
-            className="flex items-center whitespace-nowrap animate-[marquee-right_12s_linear_infinite] [will-change:transform]"
+            className="flex items-center whitespace-nowrap"
             aria-hidden
           >
             {[...CHAIN_LOGOS, ...CHAIN_LOGOS].map((c, i) => (

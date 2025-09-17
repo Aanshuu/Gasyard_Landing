@@ -14,13 +14,24 @@ export default function Hero() {
 
   // Base opacities preserved from original layout
   //   const baseOps = useMemo(() => [0.18, 0.28, 0.42], []);
-  const baseOps = useMemo(() => [0.28, 0.28, 0.28], []);
+  const baseOps = useMemo(() => [0.18, 0.28, 0.42], []);
   const slabOpacity = (idx: number) => {
     // Brighter when active, dimmer when inactive
-    return Math.min(1, baseOps[idx] * (active === idx ? 3.6 : 2.0));
+    return Math.min(1, baseOps[idx] * (active === idx ? 2.6 : 0.4));
   };
-  const slabCell = (idx: number) => (active === idx ? 8 : 10);
-  const slabDot = (idx: number) => (active === idx ? 3.2 : 2.6);
+  const slabCell = (idx: number) => (active === idx ? 6 : 10);
+  const slabDot = (idx: number) => (active === idx ? 3.2 : 2.2);
+
+  // Synchronized status messages (colors and text) tied to the same active index
+  const statusTexts = useMemo(
+    () => [
+      '{"asset":"USDC", "from":"Arbitrum", "to":"Base", "amount":"500"}',
+      'solver bids shown (fastest + cheapest route)',
+      'Settlement and transaction complete in ~7s',
+    ],
+    []
+  );
+  const statusColors = ["#8697FF", "#FFEF0E", "#00B32D"] as const;
 
   return (
     <section className="relative overflow-hidden">
@@ -58,7 +69,7 @@ export default function Hero() {
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <p className="px-4 text-center text-base sm:text-2xl text-foreground max-w-xl mt-12">
-            Bridge, reserve assets, and gas across any chain — solver-powered and trust-minimized.
+          Bridge, reserve assets, and gas across any chain — solver-powered and trust-minimized.
           </p>
         </div>
       </div>
@@ -66,7 +77,7 @@ export default function Hero() {
       {/* === Supporting text and layered dotted visuals === */}
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pb-16 sm:pb-24 mt-12">
         <p className="text-center text-xs sm:text-lg text-soft">
-          Settlement and transaction complete in ~7s
+          <span style={{ color: statusColors[active] }}>{statusTexts[active]}</span>
         </p>
 
         {/* Layered bands: simple approximation with skewed cards and labels */}
